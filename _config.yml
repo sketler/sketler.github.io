@@ -1,0 +1,23 @@
+title: Hacking related blog
+email: n/a
+description: "This blog is about cybersecurity related stuff, such as Bug Bounty, Penetration Testing, CTFs, etc."
+baseurl: ""
+url: ""
+twitter_username: spenkkkkk
+github_username:  spenkk
+
+# Build settings
+markdown: kramdown
+remote_theme: b2a3e8/jekyll-theme-console
+plugins:
+  - jekyll-feed
+
+header_pages:
+  - index.md
+  - categories.md
+  - about.md
+
+permalink: /:categories/:title/
+
+style: dark
+footer: "Theme by [b2a3e8](https://github.com/b2a3e8/)"

