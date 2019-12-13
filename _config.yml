@@ -21,3 +21,4 @@ permalink: /:categories/:title/
 
 style: dark
 footer: "Theme by [b2a3e8](https://github.com/b2a3e8/)"
+theme: jekyll-theme-hacker
