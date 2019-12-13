@@ -1,10 +1,10 @@
 title: Hacking related blog
 email: n/a
-description: "This blog is about cybersecurity related stuff, such as Bug Bounty, Penetration Testing, CTFs, etc."
+description: "This is about my security researches, CVEs found, and exploit dev related stuff"
 baseurl: ""
 url: ""
-twitter_username: spenkkkkk
-github_username:  spenkk
+twitter_username: Skeler
+github_username:  sketler
 
 # Build settings
 markdown: kramdown
@@ -20,5 +20,4 @@ header_pages:
 permalink: /:categories/:title/
 
 style: dark
-footer: "Theme by [b2a3e8](https://github.com/b2a3e8/)"
-theme: jekyll-theme-hacker
+footer: "Keep Hacking"
