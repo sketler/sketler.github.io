@@ -77,9 +77,10 @@ dadosenviados = '220'+payload+'\r\n'
 &nbsp;
 
 So, nothing new there, just a classic default buffer overflow, but i was so happy that i have found it haha. It was time to exploit it in windows vista, to smack some windows ASLRs. 
-
+&nbsp;
 I exploited it using a SEH based Buffer overflow, and by using the egghunter technique.
-
+&nbsp;
+the Code used to exploit it was:
 
 &nbsp;
 {% highlight python %}
@@ -106,6 +107,11 @@ dadosenviados = '220'+payload+'\r\n'
 
 {% endhighlight %}
 &nbsp;
+The vulnerability is, by this time (dez/2019), working. 
+&nbsp;
+I tried contact with the vendor, but didn\`t received any response.
+&nbsp;
+And there are several other vulnerabilities to exploit in this software, so if you guys want some study material. this one is recommended.
 
 #CVE
 
