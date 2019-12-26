@@ -112,6 +112,7 @@ The vulnerability is, by this time (dez/2019), working.
 I tried contact with the vendor, but didn\`t received any response.
 &nbsp;
 And there are several other vulnerabilities to exploit in this software, so if you guys want some study material. this one is recommended.
+&nbsp;
 
 #CVE
 
